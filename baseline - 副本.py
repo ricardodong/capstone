@@ -30,6 +30,11 @@ probability_table_blocks = {'1':0.10, '2':0.10, '3':0.10, '4':0.05,
                             '9':0.05, '10':0.16, '11':0.04,
                             '12':0.16, '13':0.02}
 
+probability_table_blocks2 = {'1':0, '2':0.1, '3':0, '4':0,
+                            '5':0, '6':0, '7':0, '8':0,
+                            '9':0.30, '10':0, '11':0.30,
+                            '12':0, '13':0.30}
+
 # materials that are available
 materials = ["wood", "stone", "ice"]
 
@@ -323,10 +328,13 @@ def find_structure_height(structure):
 
 # adds a new row of blocks to the bottom of the structure
 
-def add_new_row(current_tree_bottom, total_tree):
+def add_new_row(current_tree_bottom, total_tree, block_type=0, recu_time=0):
 
     groupings = generate_subsets(current_tree_bottom)   # generate possible groupings of bottom row objects
-    choosen_item = choose_item(probability_table_blocks)# choosen block for new row
+    if block_type == 0:
+        choosen_item = choose_item(probability_table_blocks)# choosen block for new row
+    else:
+        choosen_item = choose_item(probability_table_blocks2)
     center_groupings = []                               # collection of viable groupings with new block at center
     edge_groupings = []                                 # collection of viable groupings with new block at edges
     both_groupings = []                                 # collection of viable groupings with new block at both center and edges
@@ -375,7 +383,9 @@ def add_new_row(current_tree_bottom, total_tree):
         return total_tree, current_tree_bottom      # return the new structure
     
     else:
-        return add_new_row(current_tree_bottom, total_tree) # choose a new block and try again if no options available
+        if recu_time > 100 and block_type != 0:
+            return False, False
+        return add_new_row(current_tree_bottom, total_tree, block_type, recu_time+1) # choose a new block and try again if no options available
 
 
 def add_yellow_bird_new_row(current_tree_bottom, total_tree):
@@ -437,6 +447,11 @@ def add_yellow_bird_new_row(current_tree_bottom, total_tree):
 
         current_tree_bottom = new_bottom
         total_tree.append(current_tree_bottom)  # add new bottom row to the structure
+
+        total_tree, current_tree_bottom = add_new_row(current_tree_bottom, total_tree, 2)
+        if not total_tree:
+            print("impossible")
+            return False, False
 
         return total_tree, current_tree_bottom  # return the new structure
     else:
@@ -508,11 +523,13 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
         point[1] = round(point[1] + slingshot_y, 10)
 
     # recursively add more rows of blocks to the level structure
+    layers = 1 # shutong: 0 layer is the top layer
     structure_width = find_structure_width(current_tree_bottom)
     structure_height = (blocks[str(current_tree_bottom[0][0])][1])/2
     if max_height > 0.0 or max_width > 0.0:
         pre_total_tree = [current_tree_bottom]
         pre_tree_bottom = deepcopy(current_tree_bottom)
+        setted = False
         while structure_height < max_height and structure_width < max_width:
             total_tree, current_tree_bottom = add_new_row(current_tree_bottom, total_tree)
             complete_locations = []
@@ -526,13 +543,13 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
             for j in range(len(trajectory) - 1):
                 point1 = trajectory[j]
                 point2 = trajectory[j + 1]
-                if not found:
+                if not found and not setted:
                     for block in complete_locations:
                         if line_intersects_block(point1, point2, block):
                             found = True
                             print("found!!!!!!!!!!!")
                             break
-            if found:
+            if found and not setted:
                 total_tree = deepcopy(pre_total_tree)
                 current_tree_bottom = deepcopy(pre_tree_bottom)
                 total_tree, current_tree_bottom = add_yellow_bird_new_row(current_tree_bottom, total_tree)
@@ -546,6 +563,7 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
                         complete_locations.append(
                             [item[0], item[1], round((((blocks[str(item[0])][1]) / 2) + ground), 10)])
                     ground = ground + (blocks[str(item[0])][1])
+                setted = True
 
 
             structure_height = find_structure_height(complete_locations)
