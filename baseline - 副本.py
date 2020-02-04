@@ -425,8 +425,13 @@ def add_yellow_bird_new_row(current_tree_bottom, total_tree):
         for i in new_bottom:
             i[1] = round(i[1], 10)  # round all values to prevent floating point inaccuracy from causing errors
 
-        if (new_bottom[0][1] + 0.9) < new_bottom[1][1]:
-            new_bottom.append([choosen_item, round(new_bottom[0][1] + 0.45, 10)])
+        if len(new_bottom) > 1:
+            if (new_bottom[0][1] + 0.86) < new_bottom[1][1]:
+                new_bottom.append([choosen_item, round(new_bottom[0][1] + 0.43, 10)])
+                new_bottom = sorted(new_bottom, key=lambda block: block[1])
+                print(new_bottom)
+        else:
+            new_bottom.append([choosen_item, round(new_bottom[0][1] + 0.43, 10)])
             new_bottom = sorted(new_bottom, key=lambda block: block[1])
             print(new_bottom)
 
@@ -495,12 +500,19 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
 
     total_tree.append(current_tree_bottom)
 
+    angle = 0
+    release_point = find_release_point(angle)
+    trajectory = find_trajectory(release_point[0], release_point[1])
+    for point in trajectory:
+        point[0] = round(point[0] + slingshot_x, 10)
+        point[1] = round(point[1] + slingshot_y, 10)
 
     # recursively add more rows of blocks to the level structure
     structure_width = find_structure_width(current_tree_bottom)
     structure_height = (blocks[str(current_tree_bottom[0][0])][1])/2
     if max_height > 0.0 or max_width > 0.0:
         pre_total_tree = [current_tree_bottom]
+        pre_tree_bottom = deepcopy(current_tree_bottom)
         while structure_height < max_height and structure_width < max_width:
             total_tree, current_tree_bottom = add_new_row(current_tree_bottom, total_tree)
             complete_locations = []
@@ -509,6 +521,33 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
                 for item in row:
                     complete_locations.append([item[0],item[1],round((((blocks[str(item[0])][1])/2)+ground),10)])
                 ground = ground + (blocks[str(item[0])][1])
+
+            found = False
+            for j in range(len(trajectory) - 1):
+                point1 = trajectory[j]
+                point2 = trajectory[j + 1]
+                if not found:
+                    for block in complete_locations:
+                        if line_intersects_block(point1, point2, block):
+                            found = True
+                            print("found!!!!!!!!!!!")
+                            break
+            if found:
+                total_tree = deepcopy(pre_total_tree)
+                current_tree_bottom = deepcopy(pre_tree_bottom)
+                total_tree, current_tree_bottom = add_yellow_bird_new_row(current_tree_bottom, total_tree)
+                if not total_tree:
+                    print("does not work")
+                    return make_structure(absolute_ground, center_point, max_width, max_height)
+                complete_locations = []
+                ground = absolute_ground
+                for row in reversed(total_tree):
+                    for item in row:
+                        complete_locations.append(
+                            [item[0], item[1], round((((blocks[str(item[0])][1]) / 2) + ground), 10)])
+                    ground = ground + (blocks[str(item[0])][1])
+
+
             structure_height = find_structure_height(complete_locations)
             structure_width = find_structure_width(complete_locations)
             if structure_height > max_height or structure_width > max_width:
