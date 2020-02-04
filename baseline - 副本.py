@@ -31,9 +31,9 @@ probability_table_blocks = {'1':0.10, '2':0.10, '3':0.10, '4':0.05,
                             '12':0.16, '13':0.02}
 
 probability_table_blocks2 = {'1':0, '2':0.1, '3':0, '4':0,
-                            '5':0, '6':0, '7':0, '8':0,
-                            '9':0.30, '10':0, '11':0.30,
-                            '12':0, '13':0.30}
+                            '5':0, '6':0, '7':0, '8':0.3,
+                            '9':0, '10':0.3, '11':0,
+                            '12':0.3, '13':0}
 
 # materials that are available
 materials = ["wood", "stone", "ice"]
@@ -439,23 +439,19 @@ def add_yellow_bird_new_row(current_tree_bottom, total_tree):
             if (new_bottom[0][1] + 0.86) < new_bottom[1][1]:
                 new_bottom.append([choosen_item, round(new_bottom[0][1] + 0.43, 10)])
                 new_bottom = sorted(new_bottom, key=lambda block: block[1])
-                print(new_bottom)
         else:
             new_bottom.append([choosen_item, round(new_bottom[0][1] + 0.43, 10)])
             new_bottom = sorted(new_bottom, key=lambda block: block[1])
-            print(new_bottom)
 
         current_tree_bottom = new_bottom
         total_tree.append(current_tree_bottom)  # add new bottom row to the structure
 
         total_tree, current_tree_bottom = add_new_row(current_tree_bottom, total_tree, 2)
         if not total_tree:
-            print("impossible")
             return False, False
 
         return total_tree, current_tree_bottom  # return the new structure
     else:
-        print("impossible")
         return False, False
 
 
@@ -503,7 +499,7 @@ def make_peaks(center_point):
 # recursively adds rows to base of strucutre until max_width or max_height is passed
 # once this happens the last row added is removed and the structure is returned
 
-def make_structure(absolute_ground, center_point, max_width, max_height):
+def make_structure(absolute_ground, center_point, max_width, max_height, sp_height):
     
     total_tree = []                 # all blocks of structure (so far)
 
@@ -523,13 +519,10 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
         point[1] = round(point[1] + slingshot_y, 10)
 
     # recursively add more rows of blocks to the level structure
-    layers = 1 # shutong: 0 layer is the top layer
     structure_width = find_structure_width(current_tree_bottom)
     structure_height = (blocks[str(current_tree_bottom[0][0])][1])/2
     if max_height > 0.0 or max_width > 0.0:
         pre_total_tree = [current_tree_bottom]
-        pre_tree_bottom = deepcopy(current_tree_bottom)
-        setted = False
         while structure_height < max_height and structure_width < max_width:
             total_tree, current_tree_bottom = add_new_row(current_tree_bottom, total_tree)
             complete_locations = []
@@ -538,34 +531,6 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
                 for item in row:
                     complete_locations.append([item[0],item[1],round((((blocks[str(item[0])][1])/2)+ground),10)])
                 ground = ground + (blocks[str(item[0])][1])
-
-            found = False
-            for j in range(len(trajectory) - 1):
-                point1 = trajectory[j]
-                point2 = trajectory[j + 1]
-                if not found and not setted:
-                    for block in complete_locations:
-                        if line_intersects_block(point1, point2, block):
-                            found = True
-                            print("found!!!!!!!!!!!")
-                            break
-            if found and not setted:
-                total_tree = deepcopy(pre_total_tree)
-                current_tree_bottom = deepcopy(pre_tree_bottom)
-                total_tree, current_tree_bottom = add_yellow_bird_new_row(current_tree_bottom, total_tree)
-                if not total_tree:
-                    print("does not work")
-                    return make_structure(absolute_ground, center_point, max_width, max_height)
-                complete_locations = []
-                ground = absolute_ground
-                for row in reversed(total_tree):
-                    for item in row:
-                        complete_locations.append(
-                            [item[0], item[1], round((((blocks[str(item[0])][1]) / 2) + ground), 10)])
-                    ground = ground + (blocks[str(item[0])][1])
-                setted = True
-
-
             structure_height = find_structure_height(complete_locations)
             structure_width = find_structure_width(complete_locations)
             if structure_height > max_height or structure_width > max_width:
@@ -573,18 +538,79 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
             else:
                 pre_total_tree = deepcopy(total_tree)
 
+    # previous: make structure vertically correct (add y position to blocks)
+    # Shutong: find the layer of the bird target
+    complete_locations = []
+    ground = absolute_ground
+    sp_layers = -1
+    layers = 0
+    total_layers = len(total_tree)
+    for row in reversed(total_tree):
+        for item in row:
+            if (round((((blocks[str(item[0])][1])/2)+ground),10) + blocks[str(item[0])][1]) > sp_height and (round((((blocks[str(item[0])][1])/2)+ground),10) - blocks[str(item[0])][1]) < sp_height:
+                sp_layers = layers
+            complete_locations.append([item[0],item[1],round((((blocks[str(item[0])][1])/2)+ground),10)])
+        ground = ground + (blocks[str(item[0])][1])
+        layers = layers + 1
 
+    # find the splayer and delete the current tree under it (include itself)
+    sp_layers = total_layers - sp_layers - 1
+    layers = 0
+    new_total_tree = []
+    new_current_bottom = []
+    for row in total_tree:
+        new_total_tree.append(row)
+        if layers == sp_layers:
+            new_current_bottom = deepcopy(row)
+            break
+        layers = layers + 1
+    total_tree = deepcopy(new_total_tree)
+    current_tree_bottom = deepcopy(new_current_bottom)
+
+    # creat the new building
+    print(total_tree)
+    print(current_tree_bottom)
+    total_tree, current_tree_bottom = add_yellow_bird_new_row(current_tree_bottom, total_tree)
+    if not total_tree:
+        return make_structure(absolute_ground, center_point, max_width, max_height)
+    complete_locations = []
+    ground = absolute_ground
+    for row in reversed(total_tree):
+        for item in row:
+            complete_locations.append([item[0], item[1], round((((blocks[str(item[0])][1]) / 2) + ground), 10)])
+        ground = ground + (blocks[str(item[0])][1])
+    structure_height = find_structure_height(complete_locations)
+    structure_width = find_structure_width(complete_locations)
+
+    # add more rows under the sp row
+    pre_total_tree = deepcopy(total_tree)
+    while structure_height < max_height and structure_width < max_width:
+        total_tree, current_tree_bottom = add_new_row(current_tree_bottom, total_tree)
+        complete_locations = []
+        ground = absolute_ground
+        for row in reversed(total_tree):
+            for item in row:
+                complete_locations.append([item[0], item[1], round((((blocks[str(item[0])][1]) / 2) + ground), 10)])
+            ground = ground + (blocks[str(item[0])][1])
+        structure_height = find_structure_height(complete_locations)
+        structure_width = find_structure_width(complete_locations)
+        if structure_height > max_height or structure_width > max_width:
+            total_tree = deepcopy(pre_total_tree)
+        else:
+            pre_total_tree = deepcopy(total_tree)
+
+    # calculate the height
     # make structure vertically correct (add y position to blocks)
     complete_locations = []
     ground = absolute_ground
     for row in reversed(total_tree):
         for item in row:
-            complete_locations.append([item[0],item[1],round((((blocks[str(item[0])][1])/2)+ground),10)])
+            omplete_locations.append([item[0], item[1], round((((blocks[str(item[0])][1]) / 2) + ground), 10)])
         ground = ground + (blocks[str(item[0])][1])
 
-    print("Width:",find_structure_width(complete_locations))
-    print("Height:",find_structure_height(complete_locations))
-    print("Block number:" , len(complete_locations))      # number blocks present in the structure
+    print("Width:", find_structure_width(complete_locations))
+    print("Height:", find_structure_height(complete_locations))
+    print("Block number:", len(complete_locations))  # number blocks present in the structure
 
 
     # identify all possible pig positions on top of blocks (maximum 2 pigs per block, checks center before sides)
@@ -652,7 +678,7 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
     print("Pig number:", len(final_pig_positions))     # number of pigs present in the structure
     print("")
 
-    return complete_locations, final_pig_positions
+    return complete_locations, final_pig_positions, sp_layers
 
 
 
@@ -660,24 +686,25 @@ def make_structure(absolute_ground, center_point, max_width, max_height):
 # divide the available ground space between the chosen number of ground structures
 
 def create_ground_structures():
-    valid = False
-    while valid == False:
-        ground_divides = []
-        if number_ground_structures > 0:
-            ground_divides = [level_width_min, level_width_max]
-        for i in range(number_ground_structures-1):
-            ground_divides.insert(i+1,uniform(level_width_min, level_width_max))
-        valid = True
-        for j in range(len(ground_divides)-1):
-            if (ground_divides[j+1] - ground_divides[j]) < min_ground_width:
-                valid = False
+    angle = 0
+    release_point = find_release_point(angle)
+    trajectory = find_trajectory(release_point[0], release_point[1])
+    point_num = 0
+    posi = -1 # design to intersect at posi
+    for point in trajectory:
+        point[0] = round(point[0] + slingshot_x, 10)
+        point[1] = round(point[1] + slingshot_y, 10)
+        if point[1] <= posi:
+            intersect = point_num
+        point_num = point_num + 1
+    structure_width = 3
 
     # determine the area available to each ground structure
     ground_positions = []
     ground_widths = []
-    for j in range(len(ground_divides)-1):
-        ground_positions.append(ground_divides[j]+((ground_divides[j+1] - ground_divides[j])/2))
-        ground_widths.append(ground_divides[j+1] - ground_divides[j])
+    for j in range(1):
+        ground_positions.append(trajectory[intersect][0] + structure_width/2)
+        ground_widths.append(structure_width)
 
     print("number ground structures:", len(ground_positions))
     print("")
@@ -689,11 +716,11 @@ def create_ground_structures():
         max_width = ground_widths[i]
         max_height = ground_structure_height_limit
         center_point = ground_positions[i]
-        complete_locations2, final_pig_positions2 = make_structure(absolute_ground, center_point, max_width, max_height)
+        complete_locations2, final_pig_positions2, sp_layer = make_structure(absolute_ground, center_point, max_width, max_height, trajectory[intersect][1])
         complete_locations = complete_locations + complete_locations2
         final_pig_positions = final_pig_positions + final_pig_positions2
 
-    return len(ground_positions), complete_locations, final_pig_positions
+    return len(ground_positions), complete_locations, final_pig_positions, sp_layer # shutong: should be sp_layers for multiply buildings
 
 
 
@@ -1185,11 +1212,30 @@ def add_TNT(potential_positions):
     return final_TNT_positions
 
 
+# set the material of each block
 
+def set_materials(complete_locations, sp_layers):
+    assigned_materials = []
+    print(complete_locations)
+
+    layers = 0
+    current_height = complete_locations[0][2]
+    for ii in reversed(complete_locations):
+        if round(current_height, 10) != round(ii[2], 10):
+            layers = layers + 1
+        if layers == sp_layers or layers == sp_layers + 1:
+            assigned_materials.append(materials[0])
+        else:
+            assigned_materials.append(materials[1])
+    final_materials = []
+    for i in reversed(assigned_materials):
+        final_materials.append(i)
+
+    return final_materials
 
 # write level out in desired xml format
 
-def write_level_xml(complete_locations, selected_other, final_pig_positions, final_TNT_positions, final_platforms, number_birds, current_level, restricted_combinations):
+def write_level_xml(complete_locations, selected_other, final_pig_positions, final_TNT_positions, final_platforms, number_birds, current_level, restricted_combinations, final_materials):
 
     f = open("level-%s.xml" % current_level, "w")
 
@@ -1203,15 +1249,17 @@ def write_level_xml(complete_locations, selected_other, final_pig_positions, fin
     f.write('<Slingshot x="-8" y="-2.5">\n')
     f.write('<GameObjects>\n')
 
+    ii = 0
     for i in complete_locations:
         # shutong: material choosen here
-        material = materials[randint(0,len(materials)-1)]       # material is chosen randomly
+        material = final_materials[ii]       # material is chosen randomly
         while [material,block_names[str(i[0])]] in restricted_combinations:     # if material if not allowed for block type then pick again
             material = materials[randint(0,len(materials)-1)]
         rotation = 0
         if (i[0] in (3,7,9,11,13)):
             rotation = 90
         f.write('<Block type="%s" material="%s" x="%s" y="%s" rotation="%s" />\n' % (block_names[str(i[0])], material, str(i[1]), str(i[2]), str(rotation)))
+        ii = ii + 1
 
     for i in selected_other:
         # shutong: material choosen here
@@ -1299,7 +1347,7 @@ while (checker != ""):
             else:
                 level_name = str(current_level+finished_levels+4)
             
-            number_ground_structures, complete_locations, final_pig_positions = create_ground_structures()
+            number_ground_structures, complete_locations, final_pig_positions, sp_layer = create_ground_structures()
             number_platforms, final_platforms, platform_centers = create_platforms(number_platforms,complete_locations,final_pig_positions)
             complete_locations, final_pig_positions = create_platform_structures(final_platforms, platform_centers, complete_locations, final_pig_positions)
             final_pig_positions, removed_pigs = remove_unnecessary_pigs(number_pigs)
@@ -1308,7 +1356,8 @@ while (checker != ""):
             number_birds = choose_number_birds(final_pig_positions,number_ground_structures,number_platforms)
             possible_trihole_positions, possible_tri_positions, possible_cir_positions, possible_cirsmall_positions = find_additional_block_positions(complete_locations)
             selected_other = add_additional_blocks(possible_trihole_positions, possible_tri_positions, possible_cir_positions, possible_cirsmall_positions)
-            write_level_xml(complete_locations, selected_other, final_pig_positions, final_TNT_positions, final_platforms, number_birds, level_name, restricted_combinations)
+            final_materials = set_materials(complete_locations, sp_layer)
+            write_level_xml(complete_locations, selected_other, final_pig_positions, final_TNT_positions, final_platforms, number_birds, level_name, restricted_combinations, final_materials)
         finished_levels = finished_levels + number_levels
 
 
