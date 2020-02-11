@@ -13,6 +13,7 @@ blocks = {'1':[0.84,0.84], '2':[0.85,0.43], '3':[0.43,0.85], '4':[0.43,0.43],
 
 # blocks number and name
 # (blocks 3, 7, 9, 11 and 13) are their respective block names rotated 90 derees clockwise
+# blocks 3, 7, 9, 11 and 13 are vertical blocks
 block_names = {'1':"SquareHole", '2':"RectFat", '3':"RectFat", '4':"SquareSmall",
                '5':"SquareTiny", '6':"RectTiny", '7':"RectTiny", '8':"RectSmall",
                '9':"RectSmall",'10':"RectMedium",'11':"RectMedium",
@@ -34,6 +35,18 @@ probability_table_blocks2 = {'1':0, '2':0.1, '3':0, '4':0,
                             '5':0, '6':0, '7':0, '8':0.3,
                             '9':0, '10':0.3, '11':0,
                             '12':0.3, '13':0}
+
+probability_table_roof = {'1':0, '2':0.25, '3':0, '4':0,
+                          '5':0, '6':0, '7':0, '8':0.25,
+                          '9':0, '10':0.25, '11':0,
+                          '12':0.25, '13':0}
+
+probability_table_internal = {'1':0.15, '2':0, '3':0.3, '4':0.1,
+                          '5':0.04, '6':0, '7':0.15, '8':0,
+                          '9':0.2, '10':0, '11':0.03,
+                          '12':0, '13':0.03}
+
+probability_table_internal_sp = {'1':0.3, '2':0.3, '3':0.3, '4':0.1}
 
 # materials that are available
 materials = ["wood", "stone", "ice"]
@@ -287,6 +300,7 @@ def check_both(grouping,choosen_item,current_tree_bottom):
 
 def choose_item(table):
     ran_num = uniform(0.0,1.0)
+    print(ran_num)
     selected_num = 0
     while ran_num > 0:
         selected_num = selected_num + 1
@@ -494,6 +508,169 @@ def make_peaks(center_point):
     return current_tree_bottom
 
 
+# round problem not solved in this function
+
+def add_new_building_row(current_top, total_building, center, width, strong=1):
+
+    roof_material = choose_item(probability_table_roof)
+    if width < 1:
+        roof_material = 2
+    roof_width = blocks[str(roof_material)][0]
+    if roof_width < 1:
+        row_material = choose_item(probability_table_internal)
+        while blocks[str(roof_material)][0] - blocks[str(row_material)][0] < 0.05:
+            row_material = choose_item(probability_table_internal)
+    else:
+        ran_num = uniform(0.0, 1.0)
+        if ran_num > 1:  # will be hard, implmented later
+            row_material = choose_item(probability_table_internal_sp) + 13  # for special blocks
+        else:
+            row_material = choose_item(probability_table_internal)
+
+    # add roof
+    new_top = []
+    roof_num = ceil(width/roof_width)
+    half_rn, mod = divmod(roof_num, 2)
+    if mod == 0:
+        for i in range(roof_num):
+            center_distance = i - half_rn + 1  # number of blocks between current and center
+            current_posi = round((center + (center_distance * roof_width) - roof_width/2), 10)
+            new_top.append([roof_material, current_posi])
+    else:
+        for i in range(roof_num):
+            center_distance = i - half_rn  # number of blocks between current and center
+            current_posi = round((center + (center_distance * roof_width)), 10)
+            new_top.append([roof_material, current_posi])
+
+    # 3 methods in total, single support for weak, double for strong
+    if strong == 1:  # strong is 1 means strong structure, else weak
+        if roof_width < 1:
+            craft_method = 2  # place bottom at 2 edges
+        else:
+            ran_num = uniform(0.0, 1.0)
+            if ran_num > 0.5:
+                craft_method = 2
+            else:
+                craft_method = 3  # place bottoms at two sides but not edge
+    else:
+        craft_method = 1
+        if row_material > 13:
+            craft_method = 2
+
+    # add bottom
+    new_bottom = []
+    if craft_method == 2:
+        new_bottom.append([row_material, round(new_top[0][1] - roof_width / 2, 10)])
+    for i in new_top:
+        if craft_method == 1:
+            new_bottom.append([row_material, round(i[1], 10)])
+        elif craft_method == 2:
+            new_bottom.append([row_material, round(i[1]+roof_width/2, 10)])
+        else:
+            new_bottom.append([row_material, round(i[1]-roof_width/4, 10)])
+            new_bottom.append([row_material, round(i[1]+roof_width/4, 10)])
+
+    total_building.append(new_bottom)
+    total_building.append(new_top)
+    current_top = deepcopy(new_top)
+
+    return total_building, current_top
+
+
+def make_building(absolute_ground, center_point, max_width, max_height, sp_height):
+
+    # init
+    total_building = []
+    current_top = []
+    sp_layers = 1
+    total_height = 5
+
+    # creat building
+    for i in range(total_height):
+        total_building, current_top = add_new_building_row(current_top, total_building, center_point, 5)
+
+    # later part
+    complete_locations = []
+    ground = absolute_ground
+    for row in total_building:
+        for item in row:
+            complete_locations.append([item[0], item[1], round((((blocks[str(item[0])][1]) / 2) + ground), 10)])
+        ground = ground + (blocks[str(item[0])][1])
+
+    print("Width:", find_structure_width(complete_locations))
+    print("Height:", find_structure_height(complete_locations))
+    print("Block number:", len(complete_locations))  # number blocks present in the structure
+
+    # identify all possible pig positions on top of blocks (maximum 2 pigs per block, checks center before sides)
+    possible_pig_positions = []
+    for block in complete_locations:
+        block_width = round(blocks[str(block[0])][0], 10)
+        block_height = round(blocks[str(block[0])][1], 10)
+        pig_width = pig_size[0]
+        pig_height = pig_size[1]
+
+        if blocks[str(block[0])][0] < pig_width:  # dont place block on edge if block too thin
+            test_positions = [[round(block[1], 10), round(block[2] + (pig_height / 2) + (block_height / 2), 10)]]
+        else:
+            test_positions = [[round(block[1], 10), round(block[2] + (pig_height / 2) + (block_height / 2), 10)],
+                              [round(block[1] + (block_width / 3), 10),
+                               round(block[2] + (pig_height / 2) + (block_height / 2), 10)],
+                              [round(block[1] - (block_width / 3), 10),
+                               round(block[2] + (pig_height / 2) + (block_height / 2),
+                                     10)]]  # check above centre of block
+        for test_position in test_positions:
+            valid_pig = True
+            for i in complete_locations:
+                if (round((test_position[0] - pig_width / 2), 10) < round((i[1] + (blocks[str(i[0])][0]) / 2), 10) and
+                        round((test_position[0] + pig_width / 2), 10) > round((i[1] - (blocks[str(i[0])][0]) / 2),
+                                                                              10) and
+                        round((test_position[1] + pig_height / 2), 10) > round((i[2] - (blocks[str(i[0])][1]) / 2),
+                                                                               10) and
+                        round((test_position[1] - pig_height / 2), 10) < round((i[2] + (blocks[str(i[0])][1]) / 2),
+                                                                               10)):
+                    valid_pig = False
+            if valid_pig == True:
+                possible_pig_positions.append(test_position)
+
+    # identify all possible pig positions on ground within structure
+    left_bottom = total_building[0][0]
+    right_bottom = total_building[0][-1]
+    test_positions = []
+    x_pos = left_bottom[1]
+
+    while x_pos < right_bottom[1]:
+        test_positions.append([round(x_pos, 10), round(absolute_ground + (pig_height / 2), 10)])
+        x_pos = x_pos + pig_precision
+
+    for test_position in test_positions:
+        valid_pig = True
+        for i in complete_locations:
+            if (round((test_position[0] - pig_width / 2), 10) < round((i[1] + (blocks[str(i[0])][0]) / 2), 10) and
+                    round((test_position[0] + pig_width / 2), 10) > round((i[1] - (blocks[str(i[0])][0]) / 2), 10) and
+                    round((test_position[1] + pig_height / 2), 10) > round((i[2] - (blocks[str(i[0])][1]) / 2), 10) and
+                    round((test_position[1] - pig_height / 2), 10) < round((i[2] + (blocks[str(i[0])][1]) / 2), 10)):
+                valid_pig = False
+        if valid_pig == True:
+            possible_pig_positions.append(test_position)
+
+    # randomly choose a pig position and remove those that overlap it, repeat until no more valid positions
+    final_pig_positions = []
+    while len(possible_pig_positions) > 0:
+        pig_choice = possible_pig_positions.pop(randint(1, len(possible_pig_positions)) - 1)
+        final_pig_positions.append(pig_choice)
+        new_pig_positions = []
+        for i in possible_pig_positions:
+            if (round((pig_choice[0] - pig_width / 2), 10) >= round((i[0] + pig_width / 2), 10) or
+                    round((pig_choice[0] + pig_width / 2), 10) <= round((i[0] - pig_width / 2), 10) or
+                    round((pig_choice[1] + pig_height / 2), 10) <= round((i[1] - pig_height / 2), 10) or
+                    round((pig_choice[1] - pig_height / 2), 10) >= round((i[1] + pig_height / 2), 10)):
+                new_pig_positions.append(i)
+        possible_pig_positions = new_pig_positions
+
+    print("Pig number:", len(final_pig_positions))  # number of pigs present in the structure
+    print("")
+
+    return complete_locations, final_pig_positions, sp_layers
 
 
 # recursively adds rows to base of strucutre until max_width or max_height is passed
@@ -605,7 +782,7 @@ def make_structure(absolute_ground, center_point, max_width, max_height, sp_heig
     ground = absolute_ground
     for row in reversed(total_tree):
         for item in row:
-            omplete_locations.append([item[0], item[1], round((((blocks[str(item[0])][1]) / 2) + ground), 10)])
+            complete_locations.append([item[0], item[1], round((((blocks[str(item[0])][1]) / 2) + ground), 10)])
         ground = ground + (blocks[str(item[0])][1])
 
     print("Width:", find_structure_width(complete_locations))
@@ -681,8 +858,6 @@ def make_structure(absolute_ground, center_point, max_width, max_height, sp_heig
     return complete_locations, final_pig_positions, sp_layers
 
 
-
-
 # divide the available ground space between the chosen number of ground structures
 
 def create_ground_structures():
@@ -703,7 +878,7 @@ def create_ground_structures():
     ground_positions = []
     ground_widths = []
     for j in range(1):
-        ground_positions.append(trajectory[intersect][0] + structure_width/2)
+        ground_positions.append(6)
         ground_widths.append(structure_width)
 
     print("number ground structures:", len(ground_positions))
@@ -716,7 +891,7 @@ def create_ground_structures():
         max_width = ground_widths[i]
         max_height = ground_structure_height_limit
         center_point = ground_positions[i]
-        complete_locations2, final_pig_positions2, sp_layer = make_structure(absolute_ground, center_point, max_width, max_height, trajectory[intersect][1])
+        complete_locations2, final_pig_positions2, sp_layer = make_building(absolute_ground, center_point, max_width, max_height, trajectory[intersect][1])
         complete_locations = complete_locations + complete_locations2
         final_pig_positions = final_pig_positions + final_pig_positions2
 
@@ -1220,7 +1395,7 @@ def set_materials(complete_locations, sp_layers):
 
     layers = 0
     current_height = complete_locations[0][2]
-    for ii in reversed(complete_locations):
+    for ii in complete_locations:
         if round(current_height, 10) != round(ii[2], 10):
             layers = layers + 1
         if layers == sp_layers or layers == sp_layers + 1:
@@ -1228,14 +1403,14 @@ def set_materials(complete_locations, sp_layers):
         else:
             assigned_materials.append(materials[1])
     final_materials = []
-    for i in reversed(assigned_materials):
+    for i in assigned_materials:
         final_materials.append(i)
 
     return final_materials
 
 # write level out in desired xml format
 
-def write_level_xml(complete_locations, selected_other, final_pig_positions, final_TNT_positions, final_platforms, number_birds, current_level, restricted_combinations, final_materials):
+def write_level_xml(complete_locations, selected_other, final_pig_positions, final_TNT_positions, final_platforms, number_birds, current_level, restricted_combinations):
 
     f = open("level-%s.xml" % current_level, "w")
 
@@ -1252,7 +1427,7 @@ def write_level_xml(complete_locations, selected_other, final_pig_positions, fin
     ii = 0
     for i in complete_locations:
         # shutong: material choosen here
-        material = final_materials[ii]       # material is chosen randomly
+        material = materials[randint(0,len(materials)-1)]       # material is chosen randomly
         while [material,block_names[str(i[0])]] in restricted_combinations:     # if material if not allowed for block type then pick again
             material = materials[randint(0,len(materials)-1)]
         rotation = 0
@@ -1350,14 +1525,18 @@ while (checker != ""):
             number_ground_structures, complete_locations, final_pig_positions, sp_layer = create_ground_structures()
             number_platforms, final_platforms, platform_centers = create_platforms(number_platforms,complete_locations,final_pig_positions)
             complete_locations, final_pig_positions = create_platform_structures(final_platforms, platform_centers, complete_locations, final_pig_positions)
+            print("finsih create structure")
             final_pig_positions, removed_pigs = remove_unnecessary_pigs(number_pigs)
+            print("finsih removed_pigs")
             final_pig_positions = add_necessary_pigs(number_pigs)
+            print("final_pig_positions")
             final_TNT_positions = add_TNT(removed_pigs)
+            print("final_TNT_positions")
             number_birds = choose_number_birds(final_pig_positions,number_ground_structures,number_platforms)
             possible_trihole_positions, possible_tri_positions, possible_cir_positions, possible_cirsmall_positions = find_additional_block_positions(complete_locations)
             selected_other = add_additional_blocks(possible_trihole_positions, possible_tri_positions, possible_cir_positions, possible_cirsmall_positions)
-            final_materials = set_materials(complete_locations, sp_layer)
-            write_level_xml(complete_locations, selected_other, final_pig_positions, final_TNT_positions, final_platforms, number_birds, level_name, restricted_combinations, final_materials)
+            #final_materials = set_materials(complete_locations, sp_layer)
+            write_level_xml(complete_locations, selected_other, final_pig_positions, final_TNT_positions, final_platforms, number_birds, level_name, restricted_combinations)
         finished_levels = finished_levels + number_levels
 
 
