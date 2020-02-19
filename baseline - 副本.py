@@ -10,7 +10,8 @@ from math import sqrt, ceil, atan, atan2, cos, sin, pi, degrees, radians, tan
 blocks = {'1':[0.84,0.84], '2':[0.85,0.43], '3':[0.43,0.85], '4':[0.43,0.43],
           '5':[0.22,0.22], '6':[0.43,0.22], '7':[0.22,0.43], '8':[0.85,0.22],
           '9':[0.22,0.85], '10':[1.68,0.22], '11':[0.22,1.68],
-          '12':[2.06,0.22], '13':[0.22,2.06]}
+          '12':[2.06,0.22], '13':[0.22,2.06],
+          '14':[0.82,0.82],'15':[0.82,0.82],'16':[0.8,0.8],'17':[0.45,0.45]}
 
 # blocks number and name
 # (blocks 3, 7, 9, 11 and 13) are their respective block names rotated 90 derees clockwise
@@ -18,7 +19,8 @@ blocks = {'1':[0.84,0.84], '2':[0.85,0.43], '3':[0.43,0.85], '4':[0.43,0.43],
 block_names = {'1':"SquareHole", '2':"RectFat", '3':"RectFat", '4':"SquareSmall",
                '5':"SquareTiny", '6':"RectTiny", '7':"RectTiny", '8':"RectSmall",
                '9':"RectSmall",'10':"RectMedium",'11':"RectMedium",
-               '12':"RectBig",'13':"RectBig"}
+               '12':"RectBig",'13':"RectBig", '14':"TriangleHole",
+               '15':"Triangle", '16':"Circle", '17':"CircleSmall"}
 
 # additional objects number and name
 additional_objects = {'1':"TriangleHole", '2':"Triangle", '3':"Circle", '4':"CircleSmall"}
@@ -38,19 +40,19 @@ probability_table_blocks2 = {'1':0, '2':0.1, '3':0, '4':0,
                             '12':0.3, '13':0}
 
 probability_table_roof = {'1':0, '2':0, '3':0, '4':0,
-                          '5':0, '6':0, '7':0, '8':0.33,
-                          '9':0, '10':0.33, '11':0,
-                          '12':0.34, '13':0}
+                          '5':0, '6':0, '7':0, '8':0.2,
+                          '9':0, '10':0.4, '11':0,
+                          '12':0.4, '13':0}
 
 probability_table_internal = {'1':0.11, '2':0, '3':0.3, '4':0.15,
-                          '5':0.03, '6':0, '7':0.15, '8':0,
+                          '5':0.03, '6':0.03, '7':0.12, '8':0,
                           '9':0.2, '10':0, '11':0.03,
                           '12':0, '13':0.03}
 
 # probability of roof to choose different material or not (just the degree of willing)
 probability_table_roof_type = {'1':0.7, '2':0.3}
 
-probability_table_internal_sp = {'1':0.3, '2':0.3, '3':0.3, '4':0.1}
+probability_table_internal_sp = {'1':0.3, '2':0.3, '3':0.3, '4':0}
 
 # materials that are available
 materials = ["wood", "stone", "ice"]
@@ -262,6 +264,17 @@ def check_valid(grouping,choosen_item,current_tree_bottom,new_positions):
     return True
 
 
+def check_no_overlap(new_positions):
+    i = 0
+    while i < len(new_positions) - 1:
+        if round((new_positions[i][1] + (blocks[str(new_positions[i][0])][0]) / 2) - 0.01, 10) > (
+                round(new_positions[i + 1][1] - (blocks[str(new_positions[i+1][0])][0]) / 2, 10)):
+            print(new_positions)
+            print(new_positions[i][1] + (blocks[str(new_positions[i][0])][0]) / 2)
+            print(new_positions[i + 1][1] - (blocks[str(new_positions[i+1][0])][0]) / 2)
+            return False
+        i = i + 1
+    return True
 
 
 # check if new block can be placed under center of bottom row blocks validly
@@ -511,6 +524,9 @@ def make_peaks(center_point):
     return current_tree_bottom
 
 
+def get_width(block_number):
+    return round(blocks[str(block_number)][0], 10)
+
 def make_bottom(center, width, strong = 1):
     total_building = []
 
@@ -524,8 +540,8 @@ def make_bottom(center, width, strong = 1):
             row_material = choose_item(probability_table_internal)
     else:
         ran_num = uniform(0.0, 1.0)
-        if ran_num > 1:  # will be hard, implmented later
-            row_material = choose_item(probability_table_internal_sp) + 13  # for special blocks
+        if ran_num > 0.95:  # will be hard, implmented later
+            row_material = 14  # for special blocks
         else:
             row_material = choose_item(probability_table_internal)
 
@@ -587,9 +603,13 @@ def add_new_building_row(pre_top, total_building, center, width, strong=1):
     pre_left = round(pre_top[0][1] - blocks[str(pre_top[0][0])][0]/2, 10)
     pre_right = round(pre_top[-1][1] + blocks[str(pre_top[-1][0])][0]/2, 10)
 
-    # add roof
+    start = 0
+    pre_block_right = -999
     new_top = []
     roof_material = []
+    repeat = 0
+
+    # decide roof material combination
     # material in one roof can vary, whether fixed (1), 2 types or anything (3)
     # try to use as less type of material as possible
     div, mod = divmod(width, 0.85)
@@ -610,26 +630,40 @@ def add_new_building_row(pre_top, total_building, center, width, strong=1):
             width_copy = width_copy - blocks[str(next_material)][0]
             roof_material.append(next_material)
         real_width = width - width_copy
+        # width_copy is the difference of the chosen result and the input (desired) width
         # should also equal to sum(blocks[str(roof_material)]) (not this but this meaning)
     shuffle(roof_material)
 
+    # place roof
     new_left = round(center - real_width/2, 10)  # start point
     for i in roof_material:
         current_position = round(new_left + blocks[str(i)][0]/2, 10)
         new_top.append([i, current_position])
         new_left = new_left + blocks[str(i)][0]
-    new_right = new_left
+    new_right = new_left  # end point
     new_left = round(center - real_width/2, 10)  # start point
 
     # add bottom
     new_bottom = []
-    ## first row
+    ## first_material, likely to be the same in the whole level
     first_material = choose_item(probability_table_internal)
-    start = 0
-    pre_block_right = -999
+    fm_width = blocks[str(first_material)][0]  # first_material width
+    ## second material
+    if first_material == 9:
+        second_material = 3
+    elif first_material == 5:
+        second_material = 6
+    elif first_material == 7:
+        second_material = 4
+    else:
+        second_material = 0
+    # second material is the back up wider block for first material in the situation that we need to support two blocks
+    ## handle the first block to deal with wider roof
     if new_left < pre_left:
+        # new roof's left side is "lefter" than the previous one
         start = 1
-        if strong == 0:
+        # means we already handle the first roof block
+        if (strong == 0 and get_width(first_material) > 0.25) or (get_width(first_material) >= get_width(new_top[0][0])):
             if new_top[0][1] < pre_left:
                 return add_new_building_row(pre_top, total_building, center, width, strong)
             new_bottom.append([first_material, new_top[0][1]])
@@ -639,55 +673,143 @@ def add_new_building_row(pre_top, total_building, center, width, strong=1):
             new_bottom.append([first_material, round(new_top[0][1] - blocks[str(first_material)][0]/2, 10)])
             new_bottom.append([first_material, round(new_top[0][1] + blocks[str(first_material)][0]/2, 10)])
         pre_block_right = new_bottom[-1][1] + blocks[str(new_bottom[-1][0])][0] / 2
-
+    ## decide the construction method of the lower level
     # 3 methods in total, single support for weak, double for strong
     if strong == 1:  # strong is 1 means strong structure, else weak
         ran_num = uniform(0.0, 1.0)
         if ran_num < 0.5:
             craft_method = 2  # place bottoms at two edges
-        elif ran_num > 0.5:
-            craft_method = 3  # place bottoms at two sides but not edge
         else:
-            craft_method = 2  # place two bottoms at center, should be 4, implemented later
-        if blocks[str(first_material)][0] < 0.25:
-            craft_method = 3
+            craft_method = 3  # place bottoms at two sides but not edge
+        # if blocks[str(first_material)][0] < 0.25:
+        #     craft_method = 3
+        # let's do mutation in method 2
     else:
-        craft_method = 1
-    if craft_method == 2 and start == 0 and blocks[str(new_top[0][0])][0] > 0.5:
-        new_bottom.append([first_material, round(new_top[0][1] - blocks[str(new_top[0][0])][0] / 2, 10)])
-
+        ran_num = uniform(0.0, 1.0)
+        if ran_num < 0.8:
+            craft_method = 1
+        else:
+            craft_method = 2
+            repeat = 1
+    ## add the first block for method 2
+    if craft_method == 2 and start == 0 and get_width(new_top[0][0]) >= get_width(first_material):
+        new_bottom.append([first_material, round(new_top[0][1] - blocks[str(new_top[0][0])][0] / 2 + get_width(first_material)/2, 10)])
+        pre_block_right = round(new_bottom[-1][1] + blocks[str(new_bottom[-1][0])][0]/2, 10)
+    ## stop add bottom if already complete
     if start > len(new_top)-1:
         total_building.append(new_bottom)
         total_building.append(new_top)
         current_top = deepcopy(new_top)
         return total_building, current_top
-
+    ## main add loop
     for i in range(start, len(new_top)-1):
-        if blocks[str(new_top[i][0])][0] < blocks[str(first_material)][0]-0.03 or craft_method == 1:  # only put one block under it
+        if new_top[i][0] == 6:
+            if first_material == 1:
+                current_material = 3
+            else:
+                current_material = first_material
+            if craft_method == 1 or craft_method == 3:
+                if pre_block_right > new_top[i][1]:
+                    continue  # no need to add more blocks
+                new_block_left = round(new_top[i][1] - blocks[str(current_material)][0] / 2, 10)
+                if pre_block_right > new_block_left:  # overlap
+                    new_bottom.append([current_material, round(pre_block_right + blocks[str(current_material)][0] / 2, 10)])
+                else:
+                    new_bottom.append([current_material, new_top[i][1]])
+            else:
+                # craft method = 2
+                if pre_block_right >= round(new_top[i][1] + get_width(new_top[i][0])/2, 10):
+                    continue
+                new_block_left = round(new_top[i][1] + get_width(new_top[i][0])/2 - blocks[str(current_material)][0] / 2, 10)
+                if pre_block_right > new_block_left:
+                    new_bottom.append([current_material, round(pre_block_right + blocks[str(current_material)][0] / 2, 10)])
+                else:
+                    new_bottom.append([current_material, round(new_top[i][1] + blocks[str(new_top[i][0])][0] / 2, 10)])
+            continue
+        if craft_method == 1:  # only put one block under it
+            # a condition that should be deal in somewhere else
+            # blocks[str(new_top[i][0])][0] < blocks[str(first_material)][0]-0.02 or
             if pre_block_right > new_top[i][1]:
                 continue  # no need to add more blocks
+            new_block_left = new_top[i][1] - blocks[str(first_material)][0]/2
+            if pre_block_right > new_block_left:  # overlap
+                new_bottom.append([first_material, round(pre_block_right + blocks[str(first_material)][0]/2, 10)])
             else:
-                new_block_left = new_top[i][1] - blocks[str(first_material)][0]/2
-                if pre_block_right > new_block_left:  # overlap
-                    new_bottom.append([first_material, pre_block_right + blocks[str(first_material)][0]/2])
-                else:
+                if get_width(first_material) > 0.25:
                     new_bottom.append([first_material, new_top[i][1]])
+                else:
+                    random_num = uniform(0.0, 1.0)
+                    if second_material != 0 and random_num > 0.5:
+                        new_bottom.append([second_material, new_top[i][1]])
+                    else:
+                        new_bottom.append([first_material, round(new_top[i][1] - get_width(first_material)/2, 10)])
+                        new_bottom.append([first_material, round(new_top[i][1] + get_width(first_material)/2, 10)])
+                        # no more detailed overlap check for it
+                        # no avoid of long blocks used
         elif craft_method == 2:
-            if pre_block_right-0.1 < round(new_top[i][1] - blocks[str(new_top[i][0])][0] / 2, 10):
-                new_bottom.append([first_material, round(new_top[i][1] - blocks[str(new_top[i][0])][0]/2 + blocks[str(first_material)][0]/2 + 0.05, 10)])
-            new_bottom.append([first_material, round(new_top[i][1] + blocks[str(new_top[i][0])][0] / 2, 10)])
+            if pre_block_right <= round(new_top[i][1] - blocks[str(new_top[i][0])][0] / 2, 10):
+                # for some reason, no left, so add left
+                new_bottom.append([first_material, round(new_top[i][1] - blocks[str(new_top[i][0])][0]/2 + blocks[str(first_material)][0]/2, 10)])
+            pre_block_right = round(new_bottom[-1][1] + blocks[str(new_bottom[-1][0])][0] / 2, 10)
+            if pre_block_right + 0.02 >= new_top[i][1] + get_width(new_top[i][0]) / 2:
+                # 0.02 is for the considerarion of block 1 is 0.84 while roof can be 0.85
+                continue  # the current bottom is already able to support the next roof, continue
+            if get_width(first_material) > 0.25:
+                new_bottom.append([first_material, round(new_top[i][1] + blocks[str(new_top[i][0])][0] / 2, 10)])
+            else:
+                random_num = uniform(0.0, 1.0)
+                if second_material != 0 and random_num > 0.5:
+                    new_bottom.append([second_material, round(new_top[i][1] + blocks[str(new_top[i][0])][0] / 2, 10)])
+                else:
+                    new_bottom.append([first_material, round(new_top[i][1] + blocks[str(new_top[i][0])][0] / 2 - get_width(first_material) / 2, 10)])
         else:
-            new_bottom.append([first_material, round(new_top[i][1] - blocks[str(new_top[i][0])][0] / 4, 10)])
-            new_bottom.append([first_material, round(new_top[i][1] + blocks[str(new_top[i][0])][0] / 4, 10)])
-        pre_block_right = new_bottom[-1][1] + blocks[str(new_bottom[-1][0])][0]/2
+            if get_width(new_top[i][0]) + 0.02 >= 2 * get_width(first_material):
+                if get_width(new_top[i][0]) > 1.5 and blocks[str(first_material)][1] > 0.82 and blocks[str(first_material)][1] < 0.86:
+                    print("sp")
+                    ran_num = uniform(0.0, 1.0)
+                    if ran_num > 0.8:
+                        current_material = 14
+                    else:
+                        current_material = first_material
+                else:
+                    current_material = first_material
+                if pre_block_right < round(new_top[i][1] - blocks[str(new_top[i][0])][0] / 4, 10):
+                    new_block_left = round(new_top[i][1] - (blocks[str(new_top[i][0])][0] / 4) - get_width(first_material)/2, 10)
+                    if pre_block_right > new_block_left:
+                        if first_material == 1:
+                            new_bottom.append([3, round(new_top[i][1] - blocks[str(new_top[i][0])][0] / 4, 10)])
+                        else:
+                            new_bottom.append([first_material, round(new_top[i][1] - blocks[str(new_top[i][0])][0] / 4, 10)])
+                    else:
+                        new_bottom.append([current_material, round(new_top[i][1] - blocks[str(new_top[i][0])][0] / 4, 10)])
+                new_bottom.append([current_material, round(new_top[i][1] + blocks[str(new_top[i][0])][0] / 4, 10)])
+            else:
+                new_bottom.append([first_material, new_top[i][1]])
 
-    pre_block_right = new_bottom[-1][1] + blocks[str(new_bottom[-1][0])][0]/2
+        pre_block_right = round(new_bottom[-1][1] + blocks[str(new_bottom[-1][0])][0]/2, 10)
+
+    ## handle the last roof
+    pre_block_right = round(new_bottom[-1][1] + blocks[str(new_bottom[-1][0])][0]/2, 10)
     if new_top[-1][1] > pre_block_right:
         if craft_method == 1:
             if new_top[-1][1] > pre_right:
                 return add_new_building_row(pre_top, total_building, center, width, strong)
-            new_bottom.append([first_material, new_top[-1][1]])
+            if get_width(first_material) > 0.25:
+                new_bottom.append([first_material, new_top[-1][1]])
+            else:
+                random_num = uniform(0.0, 1.0)
+                if second_material != 0 and random_num > 0.5:
+                    new_bottom.append([second_material, new_top[-1][1]])
+                else:
+                    new_bottom.append([first_material, round(new_top[-1][1] - get_width(first_material) / 2, 10)])
+                    new_bottom.append([first_material, round(new_top[-1][1] + get_width(first_material) / 2, 10)])
         elif craft_method == 2:
+            if pre_block_right - 0.02 <= round(new_top[-1][1] - blocks[str(new_top[-1][0])][0] / 2, 10):
+                new_bottom.append([first_material, round(new_top[-1][1] - blocks[str(new_top[-1][0])][0]/2 + blocks[str(first_material)][0]/2, 10)])
+            else:
+                print("last no left:")
+                print(new_bottom)
+                print(new_top)
             if new_top[-1][1] + blocks[str(new_top[-1][0])][0]/2 > pre_right:
                 if new_top[-1][1] + blocks[str(new_top[-1][0])][0]/4 > pre_right:
                     return add_new_building_row(pre_top, total_building, center, width, strong)
@@ -696,13 +818,17 @@ def add_new_building_row(pre_top, total_building, center, width, strong=1):
             else:
                 new_bottom.append([first_material, round(new_top[-1][1] + blocks[str(new_top[-1][0])][0] / 2, 10)])
         else:  # currently crafting methods == 3
-            if round(new_top[-1][1] - blocks[str(new_top[-1][0])][0] / 2, 10) > pre_block_right:
+            if round(new_top[-1][1] - blocks[str(new_top[-1][0])][0] / 2, 10) + 0.02 >= pre_block_right:
                 new_bottom.append([first_material, round(new_top[-1][1] - blocks[str(new_top[-1][0])][0] / 4, 10)])
             if new_top[-1][1] + blocks[str(new_top[-1][0])][0] / 4 > pre_right:
                 return add_new_building_row(pre_top, total_building, center, width, strong)
             else:
                 new_bottom.append([first_material, round(new_top[-1][1] + blocks[str(new_top[-1][0])][0] / 4, 10)])
 
+    if not check_no_overlap(new_bottom):
+        return add_new_building_row(pre_top, total_building, center, width, strong)
+    if repeat == 1:
+        total_building.append(new_bottom)
     total_building.append(new_bottom)
     total_building.append(new_top)
     current_top = deepcopy(new_top)
@@ -721,6 +847,7 @@ def make_building(absolute_ground, center_point, max_width, max_height, sp_heigh
     total_building, current_top = make_bottom(center_point, init_width)
     width = init_width
     center = center_point
+    strong = 1
     for i in range(total_height):
         if width > 2.5:
             width = width - uniform(0.0, 0.5)
@@ -735,7 +862,7 @@ def make_building(absolute_ground, center_point, max_width, max_height, sp_heigh
         #         for j in range(i, total_height):
         #             total_building, current_top = add_new_building_row(current_top, total_building, center, width)
         ran_num = uniform(0.0, 1)  # for shifting center
-        if ran_num <0.2:
+        if ran_num <0.2 and strong == 1:
             strong = 0
         else:
             strong = 1
@@ -1669,7 +1796,7 @@ while (checker != ""):
 
             number_ground_structures = 1                     # number of ground structures
             number_platforms = 0                             # number of platforms (reduced automatically if not enough space)
-            number_pigs = 2  # number of pigs (if set too large then can cause program to infinitely loop)
+            number_pigs = 4  # number of pigs (if set too large then can cause program to infinitely loop)
 
             if (current_level+finished_levels+4) < 10:
                 level_name = "0"+str(current_level+finished_levels+4)
@@ -1686,7 +1813,7 @@ while (checker != ""):
             print("final_pig_positions")
             final_TNT_positions = add_TNT(removed_pigs)
             print("final_TNT_positions")
-            number_birds = choose_number_birds(final_pig_positions,number_ground_structures,number_platforms)
+            number_birds = 2
             possible_trihole_positions, possible_tri_positions, possible_cir_positions, possible_cirsmall_positions = find_additional_block_positions(complete_locations)
             selected_other = add_additional_blocks(possible_trihole_positions, possible_tri_positions, possible_cir_positions, possible_cirsmall_positions)
             #final_materials = set_materials(complete_locations, sp_layer)
